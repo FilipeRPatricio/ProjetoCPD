@@ -1,20 +1,17 @@
 ﻿import time
 
-from PrimeFormula import is_prime
+from Parallel import find_max_prime_parallel
 
 
-def find_max_prime_sequential(timeout):
-    start = time.time()
+if __name__ == "__main__":
 
-    n = 10**12 + 1
+    timeout = int(input("Tempo de execução (segundos): "))
 
-    best = 2
+    start_total = time.perf_counter()
 
-    while time.time() - start < timeout:
+    result = find_max_prime_parallel(timeout, 4)
 
-        if is_prime(n):
-            best = n
+    end_total = time.perf_counter()
 
-        n += 2
-
-    return best
+    print("\nMaior primo encontrado:", result)
+    print("Tempo total:", round(end_total - start_total, 2), "segundos")
