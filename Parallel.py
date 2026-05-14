@@ -2,35 +2,53 @@
 import time
 from PrimeFormula import is_prime
 
-def worker(worker_id, start, workers, best_prime, stop_event):
-    n = start + worker_id * 2
+def worker(best_prime,next_start,block_size,lock,stop_event):
 
     while not stop_event.is_set():
-        if is_prime(n):
 
-            if n > best_prime.value:
-                best_prime.value = n
+        #pedir prox intervalo
+        with lock:
+            start = next_start.value
+            next_start.value += block_size
 
-        n += workers * 2
+        end = start + block_size
+
+        # garantir numero impar
+        if start %2 == 0:
+            start += 1
+
+        #explorar intervalo
+        for n in range(start, end, 2):
+            if stop_event.is_set():
+                return
+
+            if is_prime(n):
+                with lock:
+                    if n > best_prime.value:
+                        best_prime.value = n
+
 
 def find_max_prime_parallel(timeout, workers):
 
-    start_number = 10**12 + 1
+    start_number = 10**15
+    block_size = 1000000
     best_prime = Value('Q', 2)
+    next_start = Value('Q', start_number)
+    lock = Lock()
     stop_event = Event()
-
     processes = []
 
+
     # criar processos
-    for i in range(workers):
+    for _ in range(workers):
 
         p = Process(
             target=worker,
             args=(
-                i,
-                start_number,
-                workers,
                 best_prime,
+                next_start,
+                block_size,
+                lock,
                 stop_event
             )
         )
