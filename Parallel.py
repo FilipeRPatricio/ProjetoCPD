@@ -2,52 +2,48 @@
 import time
 from PrimeFormula import is_prime
 
-def worker(best_prime,next_start,block_size,lock,stop_event):
+def worker(worker_id,workers,start_number,jump,best_prime,lock,stop_event):
+
+    # posição inicial do worker
+    n = start_number + worker_id * jump
+
+    # garantir ímpar
+    if n % 2 == 0:
+        n += 1
 
     while not stop_event.is_set():
 
-        #pedir prox intervalo
-        with lock:
-            start = next_start.value
-            next_start.value += block_size
+        if is_prime(n):
 
-        end = start + block_size
+            with lock:
 
-        # garantir numero impar
-        if start %2 == 0:
-            start += 1
+                if n > best_prime.value:
+                    best_prime.value = n
 
-        #explorar intervalo
-        for n in range(start, end, 2):
-            if stop_event.is_set():
-                return
-
-            if is_prime(n):
-                with lock:
-                    if n > best_prime.value:
-                        best_prime.value = n
-
+        # saltar para a próxima posição
+        n += workers * jump
 
 def find_max_prime_parallel(timeout, workers):
 
     start_number = 10**15
-    block_size = 1000000
+    jump = 100_000_000
+
     best_prime = Value('Q', 2)
-    next_start = Value('Q', start_number)
     lock = Lock()
     stop_event = Event()
     processes = []
 
-
-    # criar processos
-    for _ in range(workers):
+    # criar workers
+    for worker_id in range(workers):
 
         p = Process(
             target=worker,
             args=(
+                worker_id,
+                workers,
+                start_number,
+                jump,
                 best_prime,
-                next_start,
-                block_size,
                 lock,
                 stop_event
             )
@@ -55,7 +51,7 @@ def find_max_prime_parallel(timeout, workers):
 
         processes.append(p)
 
-    # arrancar processos
+    # iniciar workers
     for p in processes:
         p.start()
 
@@ -65,7 +61,7 @@ def find_max_prime_parallel(timeout, workers):
     # mandar parar
     stop_event.set()
 
-    # esperar que terminem
+    # esperar workers
     for p in processes:
         p.join()
 
