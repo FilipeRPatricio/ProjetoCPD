@@ -99,8 +99,8 @@ def menu_is_prime(sock: socket.socket) -> None:
     print(f"\n  Resultado: {n} → {estado}\n")
 
 
-def menu_find_max_prime(sock: socket.socket) -> None:
-    """Recolhe timeout e invoca find_max_prime(timeout) no servidor."""
+def menu_find_max_prime_sequential(sock: socket.socket) -> None:
+    """Recolhe timeout e invoca find_max_prime_sequential(timeout) no servidor."""
     try:
         timeout = int(input("  Tempo limite (segundos): "))
         if timeout <= 0:
@@ -109,27 +109,117 @@ def menu_find_max_prime(sock: socket.socket) -> None:
         print("  [!] Introduza um número inteiro positivo.")
         return
 
-    print(f"  A procurar durante {timeout}s... (aguarde)")
-    result = rpc_call(sock, "find_max_prime", {"timeout": timeout})
+    print(f"  A procurar (sequencial) durante {timeout}s... (aguarde)")
+    result = rpc_call(sock, "find_max_prime_sequential", {"timeout": timeout})
 
     print(f"\n  Maior primo encontrado : {result}")
     print(f"  Notação científica     : {result:.6e}")
     print(f"  Número de dígitos      : {len(str(result))}\n")
 
+
+def menu_find_max_prime_parallel(sock: socket.socket) -> None:
+    """Recolhe timeout e workers, invoca find_max_prime_parallel(timeout, workers) no servidor."""
+    try:
+        timeout = int(input("  Tempo limite (segundos): "))
+        workers = int(input("  Número de workers: "))
+        if timeout <= 0 or workers <= 0:
+            raise ValueError
+    except ValueError:
+        print("  [!] Introduza números inteiros positivos.")
+        return
+
+    print(f"  A procurar (paralelo com {workers} workers) durante {timeout}s... (aguarde)")
+    result = rpc_call(sock, "find_max_prime_parallel", {"timeout": timeout, "workers": workers})
+
+    print(f"\n  Maior primo encontrado : {result}")
+    print(f"  Notação científica     : {result:.6e}")
+    print(f"  Número de dígitos      : {len(str(result))}\n")
+
+
+def menu_game_of_life_sequential(sock: socket.socket) -> None:
+    """Executa simulação sequencial do Game of Life com timeout."""
+    try:
+        rows = int(input("  Linhas do grid (50): "))
+        cols = int(input("  Colunas do grid (50): "))
+        timeout = int(input("  Tempo limite (segundos): "))
+        
+        if rows <= 0 or cols <= 0 or timeout <= 0:
+            print("  [!] Valores devem ser positivos.")
+            return
+        
+        # gerar grid aleatório
+        import random
+        grid = [[random.randint(0, 1) for _ in range(cols)] for _ in range(rows)]
+        
+        print(f"  A simular ({rows}x{cols}) durante {timeout}s... (aguarde)")
+        result = rpc_call(sock, "game_of_life_sequential", {
+            "grid": grid,
+            "timeout": timeout
+        })
+        
+        final_grid, generations = result
+        print(f"\n  Simulação sequencial concluída")
+        print(f"  Gerações executadas: {generations}")
+        print(f"  Tempo limite: {timeout}s\n")
+        
+    except ValueError:
+        print("  [!] Entrada inválida. Introduza números inteiros.")
+    except RuntimeError as e:
+        print(f"  [!] {e}")
+
+
+def menu_game_of_life_parallel(sock: socket.socket) -> None:
+    """Executa simulação paralela do Game of Life com timeout."""
+    try:
+        rows = int(input("  Linhas do grid (50): "))
+        cols = int(input("  Colunas do grid (50): "))
+        timeout = int(input("  Tempo limite (segundos): "))
+        workers = int(input("  Número de workers (4): "))
+        
+        if rows <= 0 or cols <= 0 or timeout <= 0 or workers <= 0:
+            print("  [!] Valores devem ser positivos.")
+            return
+        
+        # gerar grid aleatório
+        import random
+        grid = [[random.randint(0, 1) for _ in range(cols)] for _ in range(rows)]
+        
+        print(f"  A simular ({rows}x{cols}) com {workers} workers durante {timeout}s... (aguarde)")
+        result = rpc_call(sock, "game_of_life_parallel", {
+            "grid": grid,
+            "timeout": timeout,
+            "workers": workers
+        })
+        
+        final_grid, generations = result
+        print(f"\n  Simulação paralela concluída")
+        print(f"  Workers: {workers}")
+        print(f"  Gerações executadas: {generations}")
+        print(f"  Tempo limite: {timeout}s\n")
+        
+    except ValueError:
+        print("  [!] Entrada inválida. Introduza números inteiros.")
+    except RuntimeError as e:
+        print(f"  [!] {e}")
+
+
 OPCOES = {
-    "1": ("Listar métodos disponíveis",              menu_list_methods),
-    "2": ("Verificar se número é primo (is_prime)",  menu_is_prime),
-    "3": ("Encontrar maior primo (find_max_prime)",  menu_find_max_prime),
+    "1": ("Listar métodos disponíveis",                               menu_list_methods),
+    "2": ("Verificar se número é primo",                              menu_is_prime),
+    "3": ("Encontrar maior primo - Sequencial",         menu_find_max_prime_sequential),
+    "4": ("Encontrar maior primo - Paralelo",           menu_find_max_prime_parallel),
+    "5": ("Game of Life - Simulação sequencial",        menu_game_of_life_sequential),
+    "6": ("Game of Life - Simulação paralela",          menu_game_of_life_parallel),
     "0": ("Sair", None),
 }
 
 def print_menu():
-    print("\n╔══════════════════════════════════════════╗")
-    print("║         Cliente RPC — Números Primos     ║")
-    print("╠══════════════════════════════════════════╣")
+    print("\n╔════════════════════════════════════════════════════════════╗")
+    print("║    Cliente RPC — Números Primos + Game of Life            ║")
+    print("╠════════════════════════════════════════════════════════════╣")
     for key, (desc, _) in OPCOES.items():
-        print(f"║  [{key}] {desc:<38}║")
-    print("╚══════════════════════════════════════════╝")
+        print(f"║  [{key}] {desc:<50}║")
+    print("╚════════════════════════════════════════════════════════════╝")
 
 def run_client(host=HOST, port=PORT):
     print(f"\nA ligar ao servidor {host}:{port}...")

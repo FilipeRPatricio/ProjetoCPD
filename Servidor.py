@@ -1,7 +1,7 @@
 ﻿"""
 servidor.py - Servidor RPC sobre sockets TCP.
 
-Disponibiliza remotamente as funções de primos através de um protocolo
+Disponibiliza remotamente as funções de primos e Game of Life através de um protocolo
 request-response com mensagens JSON.
 
 Protocolo:
@@ -17,7 +17,12 @@ import threading
 import json
 import inspect
 
-from primos import is_prime, find_max_prime_parallel, find_max_prime_sequential
+from Primos import find_max_prime_sequential, find_max_prime_parallel, is_prime
+from Game_of_Life import (
+    game_of_life_sequential_timeout,
+    game_of_life_parallel_timeout,
+)
+
 
 # ---------------------------------------------------------------------------
 # Configuração
@@ -28,20 +33,38 @@ PORT = 9000
 
 
 # ---------------------------------------------------------------------------
-# Wrapper exposto ao cliente
+# Wrappers exposto ao cliente
 # ---------------------------------------------------------------------------
 
-def find_max_prime(timeout: int) -> int:
+# Game of Life wrappers (necessários para renomear funções)
+
+def game_of_life_sequential_wrapper(grid: list, timeout: int) -> tuple:
     """
-    Procura o maior número primo possível dentro do tempo limite indicado.
+    Executa simulação sequencial do Game of Life durante timeout segundos.
 
     Parâmetros:
+        grid (list): grid inicial (lista de listas com 0s e 1s).
         timeout (int): tempo máximo de execução em segundos.
 
     Retorna:
-        int: o maior número primo encontrado.
+        tuple: (grid_final, número_de_gerações_executadas)
     """
-    return find_max_prime_parallel(int(timeout), workers=4)
+    return game_of_life_sequential_timeout(grid, timeout)
+
+
+def game_of_life_parallel_wrapper(grid: list, timeout: int, workers: int) -> tuple:
+    """
+    Executa simulação paralela do Game of Life durante timeout segundos.
+
+    Parâmetros:
+        grid (list): grid inicial (lista de listas com 0s e 1s).
+        timeout (int): tempo máximo de execução em segundos.
+        workers (int): número de processos paralelos.
+
+    Retorna:
+        tuple: (grid_final, número_de_gerações_executadas)
+    """
+    return game_of_life_parallel_timeout(grid, timeout, workers)
 
 
 # ---------------------------------------------------------------------------
@@ -49,8 +72,16 @@ def find_max_prime(timeout: int) -> int:
 # ---------------------------------------------------------------------------
 
 METHODS = {
-    "find_max_prime": find_max_prime,
+    # Números primos (agregados em Primos.py)
+    "find_max_prime_sequential": find_max_prime_sequential,
+    "find_max_prime_parallel": find_max_prime_parallel,
     "is_prime": is_prime,
+    
+    # Game of Life (com timeout)
+    "game_of_life_sequential": game_of_life_sequential_wrapper,
+    "game_of_life_parallel": game_of_life_parallel_wrapper,
+    
+    # Utilitário
     "list_methods": None,  # tratado internamente em handle_request()
 }
 
