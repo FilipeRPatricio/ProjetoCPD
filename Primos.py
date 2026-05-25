@@ -1,18 +1,10 @@
 """
-Primos.py - Cálculo de números primos com suporte sequencial e paralelo.
+primos.py - Procura do maior número primo em tempo limitado.
 
-Módulo que implementa a verificação de primalidade e a busca de números primos
-máximos com execução sequencial e paralela dentro de um tempo limite (timeout).
-
-Funções Expostas:
-- is_prime(n): verifica se um número é primo
-- find_max_prime_sequential(timeout): busca sequencial de maior primo
-- find_max_prime_parallel(timeout, workers): busca paralela de maior primo
-
-Algoritmos:
-- Verificação: Teste de divisibilidade otimizado (wheel factorization base 6)
-- Sequencial: Iteração simples sobre números ímpares
-- Paralelo: Múltiplos processos com sincronização via Lock e Event
+Funções implementadas:
+    - is_prime(n): verificação de primalidade (fornecida pelo enunciado)
+    - find_max_prime_sequential(timeout): versão sequencial
+    - find_max_prime_parallel(timeout, workers): versão paralela com multiprocessing
 """
 
 import time
@@ -20,241 +12,176 @@ from multiprocessing import Process, Value, Lock, Event
 
 
 # ---------------------------------------------------------------------------
-# Verificação de Primalidade
+# Função de primalidade (fornecida pelo enunciado — NÃO ALTERAR)
 # ---------------------------------------------------------------------------
 
 def is_prime(n: int) -> bool:
     """
-    Verifica se um número é primo usando testes de divisibilidade otimizados.
-    
-    Algoritmo:
-    1. Casos especiais: n < 2 (não primo), n ∈ {2,3} (primo)
-    2. Eliminar pares e múltiplos de 3
-    3. Testar divisores da forma 6k±1 até √n (wheel factorization)
-    
-    Complexidade: O(√n)
-    
-    Args:
-        n (int): Número a verificar.
-    
+    Verifica se n é um número primo.
+
     Returns:
         bool: True se n é primo, False caso contrário.
-    
-    Exemplo:
-        >>> is_prime(7)
-        True
-        >>> is_prime(10)
-        False
     """
-    # Números menores que 2 não são primos
     if n < 2:
         return False
-    
-    # 2 e 3 são primos
     if n in (2, 3):
         return True
-    
-    # Eliminar pares e múltiplos de 3
     if n % 2 == 0 or n % 3 == 0:
         return False
-    
-    # Testar divisores da forma 6k±1 até √n
-    # Todos os primos > 3 são da forma 6k±1
     divisor = 5
     while divisor * divisor <= n:
         if n % divisor == 0 or n % (divisor + 2) == 0:
             return False
         divisor += 6
-    
     return True
 
 
 # ---------------------------------------------------------------------------
-# Execução Sequencial
+# Versão Sequencial
 # ---------------------------------------------------------------------------
 
 def find_max_prime_sequential(timeout: float) -> int:
     """
-    Procura o maior número primo possível durante um tempo limite,
-    usando um algoritmo sequencial.
-    
-    Algoritmo:
-    1. Começar em n = 10^12 + 1 (número grande)
-    2. Incrementar n de 2 em 2 (testar apenas números ímpares)
-    3. Verificar cada n com is_prime()
-    4. Manter o maior primo encontrado
-    5. Parar quando timeout é excedido
-    
-    Complexidade: O(timeout * √n) onde n é o número testado
-    
+    Procura o maior número primo possível durante timeout segundos,
+    usando uma abordagem sequencial.
+
+    Começa em 2 e percorre os números de forma crescente, mantendo
+    o maior primo encontrado até ao limite temporal.
+
     Args:
-        timeout (float): Tempo máximo de execução em segundos (> 0).
-    
+        timeout (float): tempo máximo de execução em segundos.
+
     Returns:
-        int: O maior número primo encontrado no tempo disponível.
-    
-    Raises:
-        ValueError: Se timeout <= 0.
-    
-    Exemplo:
-        >>> primo = find_max_prime_sequential(5.0)
-        >>> print(primo)  # Maior primo encontrado em 5 segundos
+        int: o maior número primo encontrado.
     """
-    # Validar parâmetro
-    if timeout <= 0:
-        raise ValueError("O timeout deve ser positivo")
-    
-    # Registar tempo de início
-    start_time = time.time()
-    
-    # Iniciar busca em número grande para encontrar primos maiores
-    current_number = 10**12 + 1
-    best_prime = 2
-    
-    # Executar busca até exceder timeout
-    while time.time() - start_time < timeout:
-        # Testar primalidade do número atual
-        if is_prime(current_number):
-            best_prime = current_number
-        
-        # Incrementar de 2 em 2 (testar apenas números ímpares)
-        current_number += 2
-    
-    return best_prime
+    best = 2
+    n = 2
+    deadline = time.perf_counter() + timeout
+
+    while time.perf_counter() < deadline:
+        if is_prime(n):
+            best = n
+        n += 1
+
+    return best
 
 
 # ---------------------------------------------------------------------------
 # Execução Paralela
 # ---------------------------------------------------------------------------
 
-def _worker_find_max_prime(worker_id: int, num_workers: int, 
-                           start_number: int, jump: int, 
-                           best_prime: Value, lock: Lock, 
-                           stop_event: Event) -> None:
+INTERVAL_SIZE = 10 ** 12  # tamanho de cada intervalo de procura
+
+def _worker(worker_id: int, num_workers: int, best_prime: Value, lock: Lock, stop_event: Event) -> None:
     """
-    Worker paralelo que procura números primos numa região do espaço de busca.
-    
-    Cada worker começa numa posição diferente e incrementa de num_workers*jump
-    em num_workers*jump, explorando diferentes regiões do espaço em paralelo.
-    
-    Sincronização:
-    - Lock: garante que actualizações de best_prime são atómicas
-    - Event: sinaliza quando a busca deve parar (timeout excedido)
-    
+    Processo worker que procura o maior primo em intervalos do espaço de busca.
+
+    Estratégia:
+    - Cada worker começa no seu intervalo inicial (definido pelo worker_id).
+    - Dentro de cada intervalo, começa pelo fim e desce até encontrar um primo.
+      O primeiro primo encontrado a descer é garantidamente o maior do intervalo.
+    - Após encontrar esse primo (ou esgotar o intervalo), salta para o próximo
+      intervalo não explorado (avança num_workers intervalos).
+    - Nunca há sobreposição entre workers — cada um trata intervalos com
+      índice worker_id + k * num_workers.
+
     Args:
-        worker_id (int): ID único do worker (0 até num_workers-1).
-        num_workers (int): Número total de workers.
-        start_number (int): Número inicial de busca (base).
-        jump (int): Tamanho do salto entre iterações.
-        best_prime (Value): Variável partilhada (maior primo encontrado).
-        lock (Lock): Lock para sincronização de acesso a best_prime.
-        stop_event (Event): Evento para sinalizar paragem.
+        worker_id (int): identificador do worker (0 a num_workers-1).
+        num_workers (int): número total de workers.
+        best_prime (Value): memória partilhada com o maior primo encontrado.
+        lock (Lock): lock para acesso exclusivo a best_prime.
+        stop_event (Event): evento que sinaliza paragem coordenada.
     """
-    # Calcular posição inicial deste worker
-    current_number = start_number + worker_id * jump
-    
-    # Garantir que começamos com número ímpar
-    if current_number % 2 == 0:
-        current_number += 1
-    
-    # Executar busca até receber sinal de paragem
+
+    interval_index = worker_id
+
     while not stop_event.is_set():
-        # Testar primalidade do número atual
-        if is_prime(current_number):
-            # Actualizar melhor primo de forma atómica
-            with lock:
-                # Verificar novamente após adquirir lock
-                if current_number > best_prime.value:
-                    best_prime.value = current_number
-        
-        # Saltar para próximo número (distribuição entre workers)
-        # Cada worker avança de num_workers*jump
-        current_number += num_workers * jump
+
+        # calcular limites do intervalo atual
+        interval_end = (interval_index + 1) * INTERVAL_SIZE
+        interval_start = interval_index * INTERVAL_SIZE
+
+        # percorrer do fim para o início do intervalo
+        n = interval_end
+        while n >= interval_start and not stop_event.is_set():
+            if is_prime(n):
+                with lock:
+                    if n > best_prime.value:
+                        best_prime.value = n
+                break
+            n -= 1
+
+        # saltar para o próximo intervalo deste worker
+        interval_index += num_workers
 
 
 def find_max_prime_parallel(timeout: float, workers: int) -> int:
     """
-    Procura o maior número primo possível durante um tempo limite,
+    Procura o maior número primo possível durante timeout segundos,
     usando múltiplos processos em paralelo.
-    
-    Algoritmo:
-    1. Criar N workers (processos)
-    2. Cada worker começa em posição diferente (worker_id * jump)
-    3. Cada worker incrementa de N*jump (não sobreposição)
-    4. Workers actualizam valor partilhado (best_prime) com Lock
-    5. Timer principal aguarda timeout
-    6. Sinal Event para parar todos os workers
-    7. Sincronizar e recolher resultado
-    
-    Distribuição de Trabalho:
-    - Workers distribuem o espaço de busca equitativamente
-    - Sem conflitos (cada worker explora região diferente)
-    - Actualização sincronizada de melhor primo via Lock
-    
-    Sincronização:
-    - Value('Q', 2): Inteiro de 64-bit partilhado
-    - Lock: Protege actualizações de best_prime
-    - Event: Sinaliza paragem coordenada
-    - join(): Aguarda término de todos os processes
-    
+
+    Estratégia de divisão do espaço de procura:
+    - O espaço é dividido em intervalos de INTERVAL_SIZE números.
+    - Cada worker fica responsável pelos intervalos com índice
+      worker_id + k * num_workers (sem sobreposição).
+    - Dentro de cada intervalo, o worker começa pelo fim e desce,
+      encontrando assim o maior primo do intervalo imediatamente.
+    - O resultado partilhado é atualizado sempre que um primo maior
+      é encontrado, com sincronização via Lock.
+
+    Utiliza processos (multiprocessing) em vez de threads para contornar
+    o GIL do Python e obter paralelismo real em tarefas CPU-intensivas.
+
     Args:
-        timeout (float): Tempo máximo de execução em segundos (> 0).
-        workers (int): Número de processos paralelos (> 0).
-    
+        timeout (float): tempo máximo de execução em segundos.
+        workers (int): número de processos paralelos.
+
     Returns:
-        int: O maior número primo encontrado no tempo disponível.
-    
-    Raises:
-        ValueError: Se timeout <= 0 ou workers <= 0.
-    
-    Exemplo:
-        >>> primo = find_max_prime_parallel(5.0, workers=4)
-        >>> print(primo)  # Maior primo encontrado em 5 segundos com 4 workers
+        int: o maior número primo encontrado.
     """
-    # Validar parâmetros
-    if timeout <= 0:
-        raise ValueError("O timeout deve ser positivo")
-    if workers <= 0:
-        raise ValueError("Número de workers deve ser positivo")
-    
-    # Configuração de busca
-    start_number = 10**15  # Começar em número muito grande
-    jump = 100_000_000     # Salto grande entre números testados
-    
-    # Criar estruturas de sincronização partilhadas
-    # Value('Q', 2): Inteiro 64-bit inicializado a 2 (menor primo)
-    best_prime = Value('Q', 2)
+    # memória partilhada entre processos
+    best_prime = Value('Q', 2)  # 'Q' = unsigned long long (64 bits)
     lock = Lock()
     stop_event = Event()
     processes = []
-    
-    # Criar e iniciar workers
+
+    # criar e iniciar workers
     for worker_id in range(workers):
-        # Criar processo para executar _worker_find_max_prime
-        process = Process(
-            target=_worker_find_max_prime,
-            args=(
-                worker_id,
-                workers,
-                start_number,
-                jump,
-                best_prime,
-                lock,
-                stop_event
-            )
+        p = Process(
+            target=_worker,
+            args=(worker_id, workers, best_prime, lock, stop_event)
         )
-        processes.append(process)
-        process.start()
-    
-    # Aguardar timeout no processo principal
+        processes.append(p)
+        p.start()
+
+    # aguardar o timeout
     time.sleep(timeout)
-    
-    # Sinalizar a todos os workers para parar
+
+    # sinalizar paragem a todos os workers ao msm tempo
     stop_event.set()
-    
-    # Aguardar término de todos os workers
-    for process in processes:
-        process.join()
-    
-    # Retornar o melhor primo encontrado
+
+    # esperar que todos os workers acabem
+    for p in processes:
+        p.join()
+
     return best_prime.value
+
+
+if __name__ == "__main__":
+    timeout = int(input("Tempo de execução (segundos): "))
+    workers = int(input("Número de workers: "))
+
+    t0 = time.perf_counter()
+    result = find_max_prime_parallel(timeout, workers)
+    elapsed = time.perf_counter() - t0
+
+    print("\nMaior primo encontrado:", result)
+    print("Notação científica:    ", f"{result:.6e}")
+    print("Número de dígitos:     ", len(str(result)))
+    print("Tempo total:           ", round(elapsed, 2), "segundos")
+
+    """
+    import os
+
+    print(os.cpu_count())
+    """
