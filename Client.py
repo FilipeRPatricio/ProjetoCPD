@@ -4,11 +4,9 @@
 import socket
 import json
 
-# configuração tem que cuincidir com o servidor
 HOST = '127.0.0.1'
 PORT = 9000
 
-# comunicação
 
 def send_msg(sock:socket.socket, payload:dict) -> None:
     """
@@ -40,7 +38,7 @@ def recv_msg(sock:socket.socket) -> dict:
     while not buffer.endswith(b"\n"):
         chunk = sock.recv(1024)
         if not chunk:
-            raise ConnectionError("LLigação fechada pelo servidor")
+            raise ConnectionError("Ligação fechada pelo servidor")
         buffer += chunk
     return json.loads(buffer.decode("utf-8").strip())
 
@@ -52,7 +50,7 @@ def rpc_call(sock: socket.socket, method: str, params:dict) -> object:
 
         Parâmetros:
             sock (socket.socket): socket ligado ao servidor.
-            method (str): nome do método a invocar.
+            method (str): nome do metodo a invocar.
             params (dict): parâmetros da operação.
 
         Retorna:
@@ -95,7 +93,7 @@ def menu_is_prime(sock: socket.socket) -> None:
         return
 
     result = rpc_call(sock, "is_prime", {"n": n})
-    estado = "PRIMO ✓" if result else "NÃO É PRIMO ✗"
+    estado = "PRIMO" if result else "NÃO É PRIMO"
     print(f"\n  Resultado: {n} → {estado}\n")
 
 

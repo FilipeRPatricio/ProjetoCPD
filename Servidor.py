@@ -24,10 +24,6 @@ from Game_of_Life import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Configuração
-# ---------------------------------------------------------------------------
-
 HOST = "0.0.0.0"
 PORT = 9000
 
@@ -96,12 +92,11 @@ def list_methods() -> list:
     e descrição, obtidos automaticamente por introspeção das funções.
 
     Retorna:
-        list[dict]: lista com {name, params, description} por método.
+        list[dict]: lista com {name, params, description} por metodo.
     """
     result = []
     for name, func in METHODS.items():
 
-        # list_methods descreve-se a si próprio manualmente
         if func is None:
             result.append({
                 "name": "list_methods",
@@ -203,7 +198,7 @@ def handle_request(request: dict) -> dict:
     if method_name == "list_methods":
         return {"result": list_methods()}
 
-    # verificar se o método existe
+    # verificar se o metodo existe
     if method_name not in METHODS:
         available = list(METHODS.keys())
         return {"error": f"Método '{method_name}' não encontrado. Disponíveis: {available}"}
