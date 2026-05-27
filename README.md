@@ -342,7 +342,7 @@ Retornar grid
 
 #### Justificativa
 
-**Divisão: POR LINHAS (não quadrantes)**
+**Divisão: POR LINHAS (não quadrantes ou colunas)**
 
 ```
 Opção 1: Quadrantes (2x2)
@@ -351,10 +351,21 @@ Opção 1: Quadrantes (2x2)
   ├─────────────┼─────────────┤
   │   Worker 2  │   Worker 3  │
   └─────────────┴─────────────┘
-  ✗ Muitas fronteiras horizontais
-  ✗ Regiões quadradas (não necessário)
+  ✗ Muitas fronteiras (4 cruzadas)
+  ✗ Dados dispersos em memória
 
-Opção 2: Linhas (ESCOLHIDO)
+Opção 2: Colunas
+  ┌──┐
+  │W0│ ┌──┐
+  │W0│ │W1│ ┌──┐
+  │W0│ │W1│ │W2│ ┌──┐
+  │W0│ │W1│ │W2│ │W3│
+  │W0│ │W1│ │W2│ │W3│
+  └──┘ └──┘ └──┘ └──┘
+  ✗ Dados espalhados na memória (row-major)
+  ✗ Cache misses a cada acesso
+
+Opção 3: Linhas (ESCOLHIDO)
   ┌─────────────────────────────┐
   │ Worker 0: rows 0-10         │
   ├─────────────────────────────┤
@@ -364,25 +375,37 @@ Opção 2: Linhas (ESCOLHIDO)
   ├─────────────────────────────┤
   │ Worker 3: rows 30-40        │
   └─────────────────────────────┘
-  ✓ Fronteiras minimizadas
+  ✓ Dados contíguos em memória
+  ✓ Máxima localidade de cache
   ✓ Distribuição equilibrada
-  ✓ Fácil de implementar
 ```
 
 **Por que divisão por linhas é melhor:**
-```
-Fronteiras entre regiões:
-  - Linhas: 2 linhas de fronteira (top/bottom)
-  - Quadrantes: 4 linhas (4 workers)
-  
-Eficiência de Cache:
-  - Linhas: Contíguas na memória
-  - Quadrantes: Dispersas
 
-Distribuição:
-  - Linhas: Equilibrada (rows // workers)
-  - Quadrantes: Pode ser desigual
+**Row-Major Order em Memória (Crítico)**
+
+Python e a maioria das linguagens armazenam arrays 2D em row-major order: elementos de uma linha são **contíguos na memória**:
+
 ```
+Grid em memória:
+  [0,0][0,1][0,2]...[1,0][1,1][1,2]...[2,0][2,1][2,2]...
+   ↑↑↑ contíguo    ↑↑↑ contíguo    ↑↑↑ contíguo
+```
+
+- **Linhas (ESCOLHIDO):** Worker acessa `grid[0:10][:]` → dados contíguos → CPU cache hits ✓
+- **Colunas:** Worker acedia `grid[:][0:10]` → dados espalhados → CPU cache misses ✗ (recarregar constantemente)
+- **Quadrantes:** Dados dispersos → piores cache misses
+
+**Comparação Completa:**
+
+| Critério | Linhas | Colunas | Quadrantes |
+|----------|--------|---------|-----------|
+| **Localidade de Cache** | ✓ Contígua | ✗ Espalhada | ✗ Espalhada |
+| Fronteiras | 2 (top/bottom) | 2 (left/right) | 4 (cruzadas) |
+| Distribuição | Equilibrada | Equilibrada | Pode ser desigual |
+| Performance | Ótima | Degradada | Degradada |
+
+**Razão Fundamental:** As linhas alinham com a ordem de armazenamento em memória, maximizando cache hits e minimizando latência de acesso.
 
 **Distribuição Equilibrada**
 
