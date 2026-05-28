@@ -3,6 +3,8 @@
 
 import socket
 import json
+import tkinter as tk
+import threading
 
 HOST = '127.0.0.1'
 PORT = 9000
@@ -201,6 +203,28 @@ def menu_game_of_life_parallel(sock: socket.socket) -> None:
         print(f"  [!] {e}")
 
 
+def menu_game_of_life_ui(sock: socket.socket) -> None:
+    """Abre a interface gráfica do Game of Life numa janela separada."""
+    try:
+        from GoL_Client_GUI import GameOfLifeGUI
+        
+        # Criar janela em thread separada para não bloquear o menu
+        def open_gui():
+            root = tk.Tk()
+            app = GameOfLifeGUI(root, sock)
+            root.mainloop()
+        
+        thread = threading.Thread(target=open_gui, daemon=True)
+        thread.start()
+        
+        print("\n  ✓ Interface gráfica aberta numa janela separada.\n")
+        
+    except ImportError:
+        print("  [!] Módulo GoL_Client_GUI não encontrado.\n")
+    except Exception as e:
+        print(f"  [!] Erro ao abrir interface gráfica: {e}\n")
+
+
 OPCOES = {
     "1": ("Listar métodos disponíveis",                               menu_list_methods),
     "2": ("Verificar se número é primo",                              menu_is_prime),
@@ -208,6 +232,7 @@ OPCOES = {
     "4": ("Encontrar maior primo - Paralelo",           menu_find_max_prime_parallel),
     "5": ("Game of Life - Simulação sequencial",        menu_game_of_life_sequential),
     "6": ("Game of Life - Simulação paralela",          menu_game_of_life_parallel),
+    "7": ("Game of Life - Interface Gráfica",           menu_game_of_life_ui),
     "0": ("Sair", None),
 }
 
