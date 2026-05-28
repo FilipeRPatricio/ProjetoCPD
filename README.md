@@ -1,3 +1,14 @@
+
+
+
+Relatorio: 
+
+https://onedrive.live.com/:w:/g/personal/2467136b3b0586e4/IQBL1RPilmsgS6YtVoG8PyiWAZPxC-L10RvVRDqW7JVU0_M?rtime=u6uUVMu83kg&redeem=aHR0cHM6Ly8xZHJ2Lm1zL3cvYy8yNDY3MTM2YjNiMDU4NmU0L0lRQkwxUlBpbG1zZ1M2WXRWb0c4UHlpV0FaUHhDLUwxMFJ2VlJEcVc3SlZVMF9NP2U9a2wxNlFa
+
+
+
+
+
 # PROJETO CPD - Relatório Técnico
 ## Computação Paralela e Distribuída
 
